@@ -74,15 +74,6 @@ pipeline {
             steps {
                 script {
 
-                    // Post immediate acknowledgement back to Slack
-                    // so the user knows something happened
-                    slackSend(
-                        channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
-                        botUser: true,
-                        color: '#6C63FF',
-                        message: "⚡ Got it <@${env.SLACK_USER_ID}>! Parsing your command..."
-                    )
-
                     // Parse the text: "qc 4.1 72 vikings api"
                     //             or: "qc 4.1-Patch 72 mavericks terraform v4.1.x:6"
                     def parts        = env.SLACK_TEXT?.trim()?.split(/\s+/)
@@ -273,38 +264,8 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
             }
         }
 
-        // ── Stage 3: Confirm Trigger ─────────────────────────
-        stage('Confirm Trigger') {
-            steps {
-                script {
-                    slackSend(
-                        channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
-                        botUser: true,
-                        color: '#6C63FF',
-                        message: "🚀 *${env.RUN_TYPE}* triggered on *${env.ENVIRONMENT.toUpperCase()}* | `${env.VERSION}` | *${env.SQUAD}* | *${env.INTERFACE}*\nResults will be posted here when done. <@U02GBFSGQEA> <@U03JC5J0LDU> 👀"
-                    )
-                    echo "Router done — executor freed."
-                }
-            }
-        }
+
     }
 
-    // ── Post: handle unexpected router job failures ──────────
-    post {
-        failure {
-            script {
-                // Only fires if router itself crashed (not the triggered pipeline)
-                try {
-                    slackSend(
-                        channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
-                        botUser: true,
-                        color: 'danger',
-                        message: "💥 Router job crashed unexpectedly. Check build logs: ${env.BUILD_URL}\n cc @kalyan"
-                    )
-                } catch (e) {
-                    echo "Could not send failure notification: ${e.message}"
-                }
-            }
-        }
-    }
+
 }
