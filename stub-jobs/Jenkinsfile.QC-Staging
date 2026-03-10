@@ -1,16 +1,28 @@
+// Stub for QC-Staging — all real params with real defaults
 pipeline {
     agent any
     parameters {
-        string(name: 'rctl_branch',          defaultValue: '')
-        string(name: 'rcloud_version',       defaultValue: '')
-        string(name: 'rctl_buildnum',        defaultValue: '')
-        string(name: 'squad_name',           defaultValue: '')
-        string(name: 'test_type',            defaultValue: '')
-        string(name: 'rafay_interface',      defaultValue: '')
-        string(name: 'features',             defaultValue: '')
-        string(name: 'components',           defaultValue: '')
-        string(name: 'terraform_version',    defaultValue: 'None')
-        booleanParam(name: 'oci_docker_agent_host', defaultValue: false)
+        string(name: 'test_purpose',         defaultValue: 'QC Regression Run',              description: 'Purpose of this run')
+        string(name: 'rauto_branch',         defaultValue: 'master',                          description: 'rauto branch')
+        string(name: 'rauto_buildnum',       defaultValue: '',                                description: 'rauto image build number')
+        choice(name: 'squad_name',           choices: ['all','blue','green','pelicians','vikings','avengers','alpha','mavericks','eaas','common','labs-paas'], description: 'Squad')
+        string(name: 'features',             defaultValue: '',                                description: 'Rauto tags (fetched by router)')
+        string(name: 'rcloud_version',       defaultValue: '',                                description: 'Rafay controller version e.g. 4.1, 4.1-Patch')
+        string(name: 'rctl_branch',          defaultValue: 'master',                          description: 'rctl branch e.g. v4.1.x')
+        string(name: 'rctl_buildnum',        defaultValue: '',                                description: 'rctl image build number')
+        string(name: 'terraform_version',    defaultValue: 'None',                            description: 'Terraform build e.g. RafaySystems/rafay:1.1.1 or master:34 or v4.1.x:6')
+        choice(name: 'test_type',            choices: ['regression','smoke','mini-sanity'],   description: 'Test type')
+        choice(name: 'components',           choices: ['all','rafay_platform','rafay_infra','rafay_services','rafay_paas'], description: 'Components')
+        booleanParam(name: 'oci_docker_agent_host', defaultValue: false,                      description: 'Deploy docker agent on OCI')
+        choice(name: 'rafay_interface',      choices: ['rafay-apiANDrafay-cliANDrafay-terraform','rafay-api','rafay-cli','rafay-terraform'], description: 'Interface')
+        string(name: 'exclude_k8s_versions', defaultValue: 'None',                            description: 'K8s versions to exclude')
+        choice(name: 'infra_parallel',       choices: ['true','false'],                       description: 'Infra parallel')
+        choice(name: 'infra_threads',        choices: ['5','2','3','4','6','7','8','9','10'], description: 'Infra threads')
+        choice(name: 'platform_parallel',    choices: ['true','false'],                       description: 'Platform parallel')
+        choice(name: 'platform_threads',     choices: ['5','2','3','4','6','7','8','9','10'], description: 'Platform threads')
+        choice(name: 'services_parallel',    choices: ['true','false'],                       description: 'Services parallel')
+        choice(name: 'services_threads',     choices: ['5','2','3','4','6','7','8','9','10'], description: 'Services threads')
+        string(name: 'email_address',        defaultValue: 'automation@rafay.co,qa@rafay.co', description: 'Email recipients')
     }
     stages {
         stage('Received Params') {
@@ -23,7 +35,7 @@ pipeline {
             }
         }
         stage('Simulate Run') {
-            steps { sh 'sleep 3 && echo "Done!"' }
+            steps { sh 'sleep 3 && echo "QC-Staging run complete!"' }
         }
     }
 }
