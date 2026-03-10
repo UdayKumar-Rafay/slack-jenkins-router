@@ -37,7 +37,7 @@ pipeline {
                         color: color,
                         message: """\
 ${statusEmoji} *Build #${params.build_number} — ${params.build_result}*
-🌿 *${params.environment.toUpperCase()}*  |  \`${params.rcloud_version}\`  |  *${params.squad_name}*  |  *${params.rafay_interface}*
+🌿 *${params.environment.toUpperCase()}*  |  ${params.rcloud_version}  |  *${params.squad_name}*  |  *${params.rafay_interface}*
 ⏱ ${params.build_duration}
 🔗 ${params.build_url}
 
