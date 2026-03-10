@@ -259,14 +259,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                         ]
                     )
 
-                    // Store build result details
-                    env.BUILD_RESULT    = triggeredBuild.result          // SUCCESS / FAILURE / UNSTABLE
-                    env.BUILD_URL_FINAL = triggeredBuild.absoluteUrl
-                    env.BUILD_NUMBER_FINAL = triggeredBuild.number.toString()
-                    env.BUILD_DURATION  = triggeredBuild.durationString
-
-                    echo "Build result: ${env.BUILD_RESULT}"
-                    echo "Build URL: ${env.BUILD_URL_FINAL}"
+                    echo "Triggered ${env.TARGET_JOB} — result will be posted to Slack by slack-notifier"
                 }
             }
         }
