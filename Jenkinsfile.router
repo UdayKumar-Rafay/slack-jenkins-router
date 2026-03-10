@@ -74,6 +74,15 @@ pipeline {
             steps {
                 script {
 
+                    // GWT sets both SLACK_FOO (array-notation) and SLACK_FOO_0 (clean string)
+                    // Normalise to the clean _0 versions before any logic
+                    env.SLACK_TEXT       = env.SLACK_TEXT_0       ?: env.SLACK_TEXT
+                    env.SLACK_COMMAND    = env.SLACK_COMMAND_0    ?: env.SLACK_COMMAND
+                    env.SLACK_USER       = env.SLACK_USER_0       ?: env.SLACK_USER
+                    env.SLACK_USER_ID    = env.SLACK_USER_ID_0    ?: env.SLACK_USER_ID
+                    env.SLACK_CHANNEL_ID = env.SLACK_CHANNEL_ID_0 ?: env.SLACK_CHANNEL_ID
+                    env.SLACK_CHANNEL    = env.SLACK_CHANNEL_0    ?: env.SLACK_CHANNEL
+
                     // Parse the text: "qc 4.1 72 vikings api"
                     //             or: "qc 4.1-Patch 72 mavericks terraform v4.1.x:6"
                     def parts        = env.SLACK_TEXT?.trim()?.split(/\s+/)
