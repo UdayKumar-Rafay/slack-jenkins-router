@@ -101,7 +101,7 @@ https://0tx582z14j.execute-api.us-east-1.amazonaws.com/prod/
 
 ### 2. Slack App
 
-In the Slack App dashboard → **Slash Commands**:
+Add 3 slash commands to the **existing** `qa-jenkins` Slack app (`api.slack.com/apps` → select the app → **Slash Commands** → **Create New Command**):
 
 | Command | Request URL | Description |
 |---------|-------------|-------------|
@@ -109,16 +109,7 @@ In the Slack App dashboard → **Slash Commands**:
 | `/smoke` | `https://0tx582z14j.execute-api.us-east-1.amazonaws.com/prod/` | Trigger smoke run |
 | `/sanity` | `https://0tx582z14j.execute-api.us-east-1.amazonaws.com/prod/` | Trigger sanity run |
 
-All three commands point to the same Lambda URL. The Lambda forwards the full Slack payload (which includes the command name) to Jenkins, and the router reads `SLACK_COMMAND` to distinguish between them.
-
-**Bot permissions required** (`OAuth & Permissions` → `Bot Token Scopes`):
-- `chat:write` — post messages
-- `chat:write.public` — post to channels the bot hasn't been invited to (optional but convenient)
-
-**Invite the bot to the channel:**
-```
-/invite @<bot-name>
-```
+All three point to the same Lambda URL. The Lambda forwards the full Slack payload to Jenkins, and the router reads `SLACK_COMMAND` to distinguish between them. No other changes to the Slack app needed.
 
 ---
 
@@ -137,18 +128,7 @@ Ensure these are installed (`Manage Jenkins → Plugins`):
 
 ### 4. Jenkins — Credentials
 
-If a Slack bot is already configured in Jenkins for existing notifications, **reuse it** — no new credential needed. Just verify:
-
-1. The existing bot has `chat:write` scope (most notification bots already do)
-2. The bot is invited to `#jenkins-runs` — if it already posts there, nothing to do
-
-If there is no existing bot, create a credential:
-
-| ID | Type | Value |
-|----|------|-------|
-| `<your-existing-credential-id>` | Secret text | Slack Bot OAuth token (`xoxb-...`) — from Slack App → OAuth & Permissions |
-
-Either way, make sure the credential ID is selected in `Manage Jenkins → Configure System → Slack → Bot User Token Credential ID`. The Jenkinsfiles read the token from there — nothing is hardcoded in code.
+**Nothing to do here.** If the existing Jenkins bot (`qa-jenkins`) is already posting Slack notifications, the credential is already configured and working. The new jobs reuse the same setup automatically.
 
 ---
 
@@ -300,7 +280,7 @@ slack-jenkins-router/
 |---|--------|--------|
 | 1 | Update Lambda env var `JENKINS_WEBHOOK_URL` to real Jenkins URL | AWS Console or CLI |
 | 2 | Point `/regression`, `/smoke`, `/sanity` slash commands at the API Gateway URL | Slack App dashboard |
-| 3 | Reuse existing Slack bot credential — verify it has `chat:write` and is in `#jenkins-runs` | Jenkins + Slack |
+| 3 | ~~Slack credentials~~ — already working via `qa-jenkins` bot, nothing to do | — |
 | 4 | Install Generic Webhook Trigger + Slack Notification plugins (if not present) | Jenkins → Plugin Manager |
 | 5 | Create `slack-router` pipeline job | Jenkins |
 | 6 | Create `slack-notifier` pipeline job | Jenkins |
