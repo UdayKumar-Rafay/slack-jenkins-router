@@ -39,7 +39,7 @@ pipeline {
                     def statsLine = ''
                     if (total > 0) {
                         def failed  = total - passed
-                        def pct     = (passed / total * 100).round(2)
+                        def pct     = String.format("%.2f", passed / total * 100.0)
                         statsLine   = "\n📊 ${passed}/${total} passed (${pct}%)  |  ${failed} failed"
                     }
 
