@@ -242,7 +242,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                     // wait: true so we can capture the build URL + result
                     def triggeredBuild = build(
                         job: env.TARGET_JOB,
-                        wait: true,
+                        wait: false,  // router dies after triggering — target job sends final notification
                         propagate: false,   // don't fail router if pipeline fails
                         parameters: [
                             string(name: 'rctl_branch',          value: env.RCTL_BRANCH),
@@ -255,6 +255,9 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                             string(name: 'terraform_version',    value: env.TERRAFORM_VERSION),
                             string(name: 'rctl_buildnum',        value: env.RCTL_BUILDNUM),
                             booleanParam(name: 'oci_docker_agent_host', value: env.OCI_HOST.toBoolean()),
+                            string(name: 'slack_channel_id',  value: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo'),
+                            string(name: 'slack_user_id',     value: env.SLACK_USER_ID),
+                            string(name: 'assignee_tags',     value: env.ASSIGNEE_TAGS),
                         ]
                     )
 
@@ -270,38 +273,17 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
             }
         }
 
-        // ── Stage 3: Notify Slack ────────────────────────────
-        stage('Notify Slack') {
+        // ── Stage 3: Confirm Trigger ─────────────────────────
+        stage('Confirm Trigger') {
             steps {
                 script {
-
-                    def isSuccess = env.BUILD_RESULT == 'SUCCESS'
-                    def statusEmoji = isSuccess ? '✅' : '❌'
-                    def statusText  = isSuccess ? 'PASSED' : 'FAILED'
-                    def color       = isSuccess ? 'good' : 'danger'
-
-                    def message = """\
-${statusEmoji} *Build #${env.BUILD_NUMBER_FINAL} — ${statusText}*
-🌿 Env: *${env.ENVIRONMENT.toUpperCase()}*  |  `${env.VERSION}`  |  *${env.SQUAD}*  |  *${env.INTERFACE}*
-⏱ Duration: ${env.BUILD_DURATION}
-🔗 ${env.BUILD_URL_FINAL}
-
-Hey ${env.ASSIGNEE_TAGS} — tests are done 👇
-Can you:
-  1. Analyse the results
-  2. Update the Confluence page for this run
-  3. Flag any failures in this thread
-
-cc <@${env.SLACK_USER_ID}> (triggered by you) | <@U02GBFSGQEA> <@U03JC5J0LDU> 👀"""
-
                     slackSend(
                         channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
                         botUser: true,
-                        color: color,
-                        message: message
+                        color: '#6C63FF',
+                        message: "🚀 *${env.RUN_TYPE}* triggered on *${env.ENVIRONMENT.toUpperCase()}* | `${env.VERSION}` | *${env.SQUAD}* | *${env.INTERFACE}*\nResults will be posted here when done. <@U02GBFSGQEA> <@U03JC5J0LDU> 👀"
                     )
-
-                    echo "Slack notification sent."
+                    echo "Router done — executor freed."
                 }
             }
         }

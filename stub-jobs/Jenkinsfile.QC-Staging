@@ -1,8 +1,8 @@
-// Stub for QC-Staging — all real params with real defaults
+// Stub for QC-Staging — all real params + slack notification params
 pipeline {
     agent any
     parameters {
-        string(name: 'test_purpose',         defaultValue: 'QC Regression Run',              description: 'Purpose of this run')
+        string(name: 'test_purpose',         defaultValue: 'QC Regression Run',                      description: 'Purpose of this run')
         string(name: 'rauto_branch',         defaultValue: 'master',                          description: 'rauto branch')
         string(name: 'rauto_buildnum',       defaultValue: '',                                description: 'rauto image build number')
         choice(name: 'squad_name',           choices: ['all','blue','green','pelicians','vikings','avengers','alpha','mavericks','eaas','common','labs-paas'], description: 'Squad')
@@ -23,6 +23,10 @@ pipeline {
         choice(name: 'services_parallel',    choices: ['true','false'],                       description: 'Services parallel')
         choice(name: 'services_threads',     choices: ['5','2','3','4','6','7','8','9','10'], description: 'Services threads')
         string(name: 'email_address',        defaultValue: 'automation@rafay.co,qa@rafay.co', description: 'Email recipients')
+        // ── Slack notification params (passed by router) ──
+        string(name: 'slack_channel_id',     defaultValue: '',                                description: 'Slack channel to post results to')
+        string(name: 'slack_user_id',        defaultValue: '',                                description: 'Slack user who triggered the run')
+        string(name: 'assignee_tags',        defaultValue: '',                                description: 'Slack assignee tags for notification')
     }
     stages {
         stage('Received Params') {
@@ -36,6 +40,35 @@ pipeline {
         }
         stage('Simulate Run') {
             steps { sh 'sleep 3 && echo "QC-Staging run complete!"' }
+        }
+    }
+    post {
+        always {
+            script {
+                def isSuccess = currentBuild.result == 'SUCCESS' || currentBuild.result == null
+                def statusEmoji = isSuccess ? '✅' : '❌'
+                def statusText  = isSuccess ? 'PASSED' : 'FAILED'
+                def color       = isSuccess ? 'good' : 'danger'
+                def channel     = params.slack_channel_id ?: '#jenkins-runs-demo'
+
+                slackSend(
+                    channel: channel,
+                    botUser: true,
+                    color: color,
+                    message: """${statusEmoji} *Build #${env.BUILD_NUMBER} — ${statusText}*
+🌿 Env: *QC-Staging*  |  `${params.rcloud_version}`  |  *${params.squad_name}*  |  *${params.rafay_interface}*
+⏱ Duration: ${currentBuild.durationString}
+🔗 ${env.BUILD_URL}
+
+Hey ${params.assignee_tags} — tests are done 👇
+Can you:
+  1. Analyse the results
+  2. Update the Confluence page for this run
+  3. Flag any failures in this thread
+
+cc <@${params.slack_user_id}> (triggered by you) | <@U02GBFSGQEA> <@U03JC5J0LDU> 👀"""
+                )
+            }
         }
     }
 }
