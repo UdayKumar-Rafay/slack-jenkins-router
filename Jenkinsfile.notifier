@@ -13,6 +13,8 @@ pipeline {
         string(name: 'rafay_interface', defaultValue: '')
         string(name: 'test_type',       defaultValue: '')
         string(name: 'triggered_by',    defaultValue: '')
+        string(name: 'passed_count',    defaultValue: '0')
+        string(name: 'total_count',     defaultValue: '0')
     }
     stages {
         stage('Notify') {
@@ -31,6 +33,16 @@ pipeline {
                     def statusEmoji  = isSuccess ? '✅' : '❌'
                     def color        = isSuccess ? 'good' : 'danger'
 
+                    // Pass percentage line — only shown when total > 0
+                    def passed = params.passed_count?.isInteger() ? params.passed_count.toInteger() : 0
+                    def total  = params.total_count?.isInteger()  ? params.total_count.toInteger()  : 0
+                    def statsLine = ''
+                    if (total > 0) {
+                        def failed  = total - passed
+                        def pct     = (passed / total * 100).round(2)
+                        statsLine   = "\n📊 ${passed}/${total} passed (${pct}%)  |  ${failed} failed"
+                    }
+
                     slackSend(
                         channel: '#jenkins-runs-demo',
                         botUser: true,
@@ -38,7 +50,7 @@ pipeline {
                         message: """\
 ${statusEmoji} *Build #${params.build_number} — ${params.build_result}*
 🌿 *${params.environment.toUpperCase()}*  |  ${params.rcloud_version}  |  *${params.squad_name}*  |  *${params.rafay_interface}*
-⏱ ${params.build_duration}
+⏱ ${params.build_duration}${statsLine}
 🔗 ${params.build_url}
 
 Hey ${assigneeTags} — tests are done 👇

@@ -41,22 +41,36 @@ pipeline {
     }
     post {
         always {
-            build(
-                job: 'slack-notifier',
-                wait: false,
-                parameters: [
-                    string(name: 'build_result',    value: currentBuild.result ?: 'SUCCESS'),
-                    string(name: 'build_url',       value: env.BUILD_URL),
-                    string(name: 'build_number',    value: env.BUILD_NUMBER),
-                    string(name: 'build_duration',  value: currentBuild.durationString),
-                    string(name: 'squad_name',      value: params.squad_name),
-                    string(name: 'environment',     value: 'QC-Staging'),
-                    string(name: 'rcloud_version',  value: params.rcloud_version),
-                    string(name: 'rafay_interface', value: params.rafay_interface),
-                    string(name: 'test_type',       value: params.test_type),
-                    string(name: 'triggered_by',    value: params.triggered_by),
-                ]
-            )
+            script {
+                // In real pipelines: read from RobotPublisher action after step([$class:'RobotPublisher',...])
+                // def robotAction = currentBuild.rawBuild.getAction(hudson.plugins.robot.RobotBuildAction.class)
+                // def passed = robotAction?.overallPassedCount ?: 0
+                // def total  = robotAction?.overallTotalCount  ?: 0
+
+                // Stub: simulate test counts
+                def passed = 34
+                def total  = 38
+
+                build(
+                    job: 'slack-notifier',
+                    wait: false,
+                    propagate: false,
+                    parameters: [
+                        string(name: 'build_result',    value: currentBuild.result ?: 'SUCCESS'),
+                        string(name: 'build_url',       value: env.BUILD_URL),
+                        string(name: 'build_number',    value: env.BUILD_NUMBER),
+                        string(name: 'build_duration',  value: currentBuild.durationString),
+                        string(name: 'squad_name',      value: params.squad_name),
+                        string(name: 'environment',     value: 'QC-Staging'),
+                        string(name: 'rcloud_version',  value: params.rcloud_version),
+                        string(name: 'rafay_interface', value: params.rafay_interface),
+                        string(name: 'test_type',       value: params.test_type),
+                        string(name: 'triggered_by',    value: params.triggered_by),
+                        string(name: 'passed_count',    value: passed.toString()),
+                        string(name: 'total_count',     value: total.toString()),
+                    ]
+                )
+            }
         }
     }
 }
