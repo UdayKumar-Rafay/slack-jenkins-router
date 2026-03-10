@@ -246,9 +246,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                             string(name: 'terraform_version',    value: env.TERRAFORM_VERSION),
                             string(name: 'rctl_buildnum',        value: env.RCTL_BUILDNUM),
                             booleanParam(name: 'oci_docker_agent_host', value: env.OCI_HOST.toBoolean()),
-                            string(name: 'slack_channel_id',  value: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo'),
-                            string(name: 'slack_user_id',     value: env.SLACK_USER_ID),
-                            string(name: 'assignee_tags',     value: env.ASSIGNEE_TAGS),
+                            string(name: 'triggered_by',     value: env.SLACK_USER),
                         ]
                     )
 

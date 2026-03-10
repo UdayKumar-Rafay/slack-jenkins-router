@@ -1,0 +1,55 @@
+// slack-notifier — lightweight job, triggered by target jobs in post{always}
+// Sends the final Slack result message. Frees in ~2 seconds.
+pipeline {
+    agent any
+    parameters {
+        string(name: 'build_result',    defaultValue: 'SUCCESS')
+        string(name: 'build_url',       defaultValue: '')
+        string(name: 'build_number',    defaultValue: '')
+        string(name: 'build_duration',  defaultValue: '')
+        string(name: 'squad_name',      defaultValue: '')
+        string(name: 'environment',     defaultValue: '')
+        string(name: 'rcloud_version',  defaultValue: '')
+        string(name: 'rafay_interface', defaultValue: '')
+        string(name: 'test_type',       defaultValue: '')
+        string(name: 'triggered_by',    defaultValue: '')
+    }
+    stages {
+        stage('Notify') {
+            steps {
+                script {
+                    def squadMap = [
+                        "vikings":  ["U07E5MPLE7K", "U09FH2AANM9"],
+                        "avengers": ["U077D7ZJMJQ", "U0A7LJ03JKA"],
+                        "alpha":    ["U03JC5J0LDU", "U03JC5J0LDU"],
+                        "mavericks":["U07E5MPLE7K", "U03JC5J0LDU"],
+                    ]
+
+                    def assignees    = squadMap[params.squad_name] ?: []
+                    def assigneeTags = assignees.unique().collect { "<@${it}>" }.join(' ')
+                    def isSuccess    = params.build_result == 'SUCCESS'
+                    def statusEmoji  = isSuccess ? '✅' : '❌'
+                    def color        = isSuccess ? 'good' : 'danger'
+
+                    slackSend(
+                        channel: '#jenkins-runs-demo',
+                        botUser: true,
+                        color: color,
+                        message: """\
+${statusEmoji} *Build #${params.build_number} — ${params.build_result}*
+🌿 *${params.environment.toUpperCase()}*  |  \`${params.rcloud_version}\`  |  *${params.squad_name}*  |  *${params.rafay_interface}*
+⏱ ${params.build_duration}
+🔗 ${params.build_url}
+
+Hey ${assigneeTags} — tests are done 👇
+  1. Analyse the results
+  2. Update the Confluence page
+  3. Flag any failures in this thread
+
+cc @${params.triggered_by} | <@U02GBFSGQEA> <@U03JC5J0LDU> 👀"""
+                    )
+                }
+            }
+        }
+    }
+}

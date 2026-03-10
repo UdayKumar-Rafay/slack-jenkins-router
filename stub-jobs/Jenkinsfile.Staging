@@ -1,4 +1,4 @@
-// Stub for Staging — all real params + slack notification params
+// Stub for Staging
 pipeline {
     agent any
     parameters {
@@ -23,10 +23,7 @@ pipeline {
         choice(name: 'services_parallel',    choices: ['true','false'],                       description: 'Services parallel')
         choice(name: 'services_threads',     choices: ['5','2','3','4','6','7','8','9','10'], description: 'Services threads')
         string(name: 'email_address',        defaultValue: 'automation@rafay.co,qa@rafay.co', description: 'Email recipients')
-        // ── Slack notification params (passed by router) ──
-        string(name: 'slack_channel_id',     defaultValue: '',                                description: 'Slack channel to post results to')
-        string(name: 'slack_user_id',        defaultValue: '',                                description: 'Slack user who triggered the run')
-        string(name: 'assignee_tags',        defaultValue: '',                                description: 'Slack assignee tags for notification')
+        string(name: 'triggered_by',         defaultValue: '',                                description: 'Slack username who triggered this run')
     }
     stages {
         stage('Received Params') {
@@ -44,31 +41,22 @@ pipeline {
     }
     post {
         always {
-            script {
-                def isSuccess = currentBuild.result == 'SUCCESS' || currentBuild.result == null
-                def statusEmoji = isSuccess ? '✅' : '❌'
-                def statusText  = isSuccess ? 'PASSED' : 'FAILED'
-                def color       = isSuccess ? 'good' : 'danger'
-                def channel     = params.slack_channel_id ?: '#jenkins-runs-demo'
-
-                slackSend(
-                    channel: channel,
-                    botUser: true,
-                    color: color,
-                    message: """${statusEmoji} *Build #${env.BUILD_NUMBER} — ${statusText}*
-🌿 Env: *Staging*  |  `${params.rcloud_version}`  |  *${params.squad_name}*  |  *${params.rafay_interface}*
-⏱ Duration: ${currentBuild.durationString}
-🔗 ${env.BUILD_URL}
-
-Hey ${params.assignee_tags} — tests are done 👇
-Can you:
-  1. Analyse the results
-  2. Update the Confluence page for this run
-  3. Flag any failures in this thread
-
-cc <@${params.slack_user_id}> (triggered by you) | <@U02GBFSGQEA> <@U03JC5J0LDU> 👀"""
-                )
-            }
+            build(
+                job: 'slack-notifier',
+                wait: false,
+                parameters: [
+                    string(name: 'build_result',    value: currentBuild.result ?: 'SUCCESS'),
+                    string(name: 'build_url',       value: env.BUILD_URL),
+                    string(name: 'build_number',    value: env.BUILD_NUMBER),
+                    string(name: 'build_duration',  value: currentBuild.durationString),
+                    string(name: 'squad_name',      value: params.squad_name),
+                    string(name: 'environment',     value: 'Staging'),
+                    string(name: 'rcloud_version',  value: params.rcloud_version),
+                    string(name: 'rafay_interface', value: params.rafay_interface),
+                    string(name: 'test_type',       value: params.test_type),
+                    string(name: 'triggered_by',    value: params.triggered_by),
+                ]
+            )
         }
     }
 }
