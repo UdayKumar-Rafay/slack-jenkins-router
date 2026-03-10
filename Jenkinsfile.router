@@ -256,6 +256,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                             string(name: 'rctl_buildnum',        value: env.RCTL_BUILDNUM),
                             booleanParam(name: 'oci_docker_agent_host', value: env.OCI_HOST.toBoolean()),
                             string(name: 'triggered_by',     value: env.SLACK_USER),
+                            string(name: 'triggered_by_id',  value: env.SLACK_USER_ID),
                         ]
                     )
 

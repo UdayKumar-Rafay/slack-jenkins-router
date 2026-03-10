@@ -24,6 +24,7 @@ pipeline {
         choice(name: 'services_threads',     choices: ['5','2','3','4','6','7','8','9','10'], description: 'Services threads')
         string(name: 'email_address',        defaultValue: 'automation@rafay.co,qa@rafay.co', description: 'Email recipients')
         string(name: 'triggered_by',         defaultValue: '',                                description: 'Slack username who triggered this run')
+        string(name: 'triggered_by_id',      defaultValue: '',                                description: 'Slack user ID of the triggerer')
     }
     stages {
         stage('Received Params') {
@@ -66,6 +67,7 @@ pipeline {
                         string(name: 'rafay_interface', value: params.rafay_interface),
                         string(name: 'test_type',       value: params.test_type),
                         string(name: 'triggered_by',    value: params.triggered_by),
+                        string(name: 'triggered_by_id', value: params.triggered_by_id ?: ''),
                         string(name: 'passed_count',    value: passed.toString()),
                         string(name: 'total_count',     value: total.toString()),
                     ]
