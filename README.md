@@ -169,19 +169,21 @@ Create two new Pipeline jobs:
 
 ### 6. Jenkins — Script Security Approvals
 
-Two signatures need to be approved once after first run.
+Jenkins sandboxes Groovy pipelines by default. The first time a pipeline uses a method that isn't pre-approved, it blocks the build and queues the signature for an admin to review.
 
-`Manage Jenkins → Script Approval`:
+**How it works:** run the job once → it fails → go to `Manage Jenkins → Script Approval` → click **Approve** next to the flagged signature → re-run. That's it, one-time per signature, works forever after.
+
+Two signatures need approval:
 
 ```
 staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods getText java.net.URL
 ```
-*(Used by the router to fetch squad tags from DynamoDB)*
+*(Triggered by `slack-router` on first run — used to fetch squad tags from DynamoDB)*
 
 ```
 method hudson.model.Run getAction java.lang.Class
 ```
-*(Used by target pipelines to read Robot Framework pass/fail counts)*
+*(Triggered by a target pipeline on first run — used to read Robot Framework pass/fail counts via `currentBuild.rawBuild`)*
 
 ---
 
