@@ -78,6 +78,7 @@ pipeline {
                     // so the user knows something happened
                     slackSend(
                         channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
+                        botUser: true,
                         color: '#6C63FF',
                         message: "⚡ Got it <@${env.SLACK_USER_ID}>! Parsing your command..."
                     )
@@ -95,6 +96,7 @@ pipeline {
                     if (!parts || parts.size() < 5 || (isTerraform && parts.size() < 6) || tooManyArgs) {
                         slackSend(
                             channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
+                        botUser: true,
                             color: 'danger',
                             message: """❌ Invalid command format <@${env.SLACK_USER_ID}>!
 
@@ -174,6 +176,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                     if (!jobMap.containsKey(env.ENVIRONMENT)) {
                         slackSend(
                             channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
+                        botUser: true,
                             color: 'danger',
                             message: "❌ Unknown environment `${env.ENVIRONMENT}` <@${env.SLACK_USER_ID}>. Valid: `${jobMap.keySet().join('` `')}`"
                         )
@@ -184,6 +187,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                     if (!squadMap.containsKey(env.SQUAD)) {
                         slackSend(
                             channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
+                        botUser: true,
                             color: 'danger',
                             message: "❌ Unknown squad `${env.SQUAD}` <@${env.SLACK_USER_ID}>. Valid: `${squadMap.keySet().join('` `')}`"
                         )
@@ -229,6 +233,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
 
                     slackSend(
                         channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
+                        botUser: true,
                         color: '#FFB703',
                         message: "🚀 Triggering *${env.RUN_TYPE}* on *${env.ENVIRONMENT}* | `${env.VERSION}` | *${env.SQUAD}* | *${env.INTERFACE}*..."
                     )
@@ -291,6 +296,7 @@ cc <@${env.SLACK_USER_ID}> (triggered by you) | <@U02GBFSGQEA> <@U03JC5J0LDU> �
 
                     slackSend(
                         channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
+                        botUser: true,
                         color: color,
                         message: message
                     )
@@ -309,6 +315,7 @@ cc <@${env.SLACK_USER_ID}> (triggered by you) | <@U02GBFSGQEA> <@U03JC5J0LDU> �
                 try {
                     slackSend(
                         channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
+                        botUser: true,
                         color: 'danger',
                         message: "💥 Router job crashed unexpectedly. Check build logs: ${env.BUILD_URL}\n cc @kalyan"
                     )
