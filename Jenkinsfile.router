@@ -32,6 +32,11 @@
 //   [terraform_ver]  : required for terraform — 1.1.57 → RafaySystems/rafay:1.1.57 | v4.1.x:6 | master:657
 // ============================================================
 
+// Wraps slackSend so missing credentials don't crash the pipeline
+def notifySlack(Map args) {
+    try { slackSend(args) } catch(e) { echo "Slack skipped: ${e.message}" }
+}
+
 pipeline {
     agent any
 
@@ -76,7 +81,7 @@ pipeline {
 
                     // Post immediate acknowledgement back to Slack
                     // so the user knows something happened
-                    slackSend(
+                    notifySlack(
                         channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
                         color: '#6C63FF',
                         message: "⚡ Got it <@${env.SLACK_USER_ID}>! Parsing your command..."
@@ -93,7 +98,7 @@ pipeline {
                     def tooManyArgs = !isTerraform && parts?.size() > 5
 
                     if (!parts || parts.size() < 5 || (isTerraform && parts.size() < 6) || tooManyArgs) {
-                        slackSend(
+                        notifySlack(
                             channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
                             color: 'danger',
                             message: """❌ Invalid command format <@${env.SLACK_USER_ID}>!
@@ -172,7 +177,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
 
                     // Validate environment
                     if (!jobMap.containsKey(env.ENVIRONMENT)) {
-                        slackSend(
+                        notifySlack(
                             channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
                             color: 'danger',
                             message: "❌ Unknown environment `${env.ENVIRONMENT}` <@${env.SLACK_USER_ID}>. Valid: `${jobMap.keySet().join('` `')}`"
@@ -182,7 +187,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
 
                     // Validate squad
                     if (!squadMap.containsKey(env.SQUAD)) {
-                        slackSend(
+                        notifySlack(
                             channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
                             color: 'danger',
                             message: "❌ Unknown squad `${env.SQUAD}` <@${env.SLACK_USER_ID}>. Valid: `${squadMap.keySet().join('` `')}`"
@@ -227,7 +232,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
             steps {
                 script {
 
-                    slackSend(
+                    notifySlack(
                         channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
                         color: '#FFB703',
                         message: "🚀 Triggering *${env.RUN_TYPE}* on *${env.ENVIRONMENT}* | `${env.VERSION}` | *${env.SQUAD}* | *${env.INTERFACE}*..."
@@ -289,7 +294,7 @@ Can you:
 
 cc <@${env.SLACK_USER_ID}> (triggered by you) | <@U02GBFSGQEA> <@U03JC5J0LDU> 👀"""
 
-                    slackSend(
+                    notifySlack(
                         channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
                         color: color,
                         message: message
@@ -307,7 +312,7 @@ cc <@${env.SLACK_USER_ID}> (triggered by you) | <@U02GBFSGQEA> <@U03JC5J0LDU> �
             script {
                 // Only fires if router itself crashed (not the triggered pipeline)
                 try {
-                    slackSend(
+                    notifySlack(
                         channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
                         color: 'danger',
                         message: "💥 Router job crashed unexpectedly. Check build logs: ${env.BUILD_URL}\n cc @kalyan"
