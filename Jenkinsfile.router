@@ -1,0 +1,321 @@
+// ============================================================
+// Jenkinsfile.router
+// Slack → Jenkins Router Job
+//
+// HOW IT WORKS:
+//   1. Slack slash command POSTs to Generic Webhook Trigger
+//   2. This job parses the params from the Slack payload
+//   3. Maps squad → assignee, env → target job
+//   4. Triggers the correct regression pipeline
+//   5. Posts result + @tag back to #jenkins-runs in Slack
+//
+// REQUIRED JENKINS CREDENTIALS:
+//   - SLACK_BOT_TOKEN     (Secret text) — xoxb-... from Slack app
+//   - SLACK_SIGNING_SECRET (Secret text) — from Slack app Basic Info
+//
+// REQUIRED JENKINS PLUGINS:
+//   - Generic Webhook Trigger
+//   - Slack Notification
+//
+// SLACK SLASH COMMAND FORMAT:
+//   /regression qc  4.1  72  vikings api
+//   /smoke      qc  4.1-Patch  84  alpha   cli
+//   /sanity     qc  4.1  72  mavericks terraform v4.1.x:6
+//   /sanity     qc  4.1  72  mavericks terraform 1.1.57
+//   /sanity     qc  4.1  72  mavericks terraform master:657
+//
+//   <env>            : qc | stage | prod | master
+//   <version>        : 4.1 | 4.1-Patch  (rcloud_version; rctl_branch derived as v4.1.x)
+//   <rctl_buildnum>  : rctl image build number (e.g. 72)
+//   <squad>          : vikings | avengers | alpha | mavericks
+//   <interface>      : api | cli | terraform
+//   [terraform_ver]  : required for terraform — 1.1.57 → RafaySystems/rafay:1.1.57 | v4.1.x:6 | master:657
+// ============================================================
+
+pipeline {
+    agent any
+
+    // ── Generic Webhook Trigger config ──────────────────────
+    // Slack POSTs form-encoded body, we extract each field
+    triggers {
+        GenericTrigger(
+            genericVariables: [
+                // The slash command itself e.g. /regression
+                [key: 'SLACK_COMMAND',    value: '$.command'],
+                // Everything after the command e.g. "qc v4.1.x vikings api"
+                [key: 'SLACK_TEXT',       value: '$.text'],
+                // Slack user who typed the command
+                [key: 'SLACK_USER',       value: '$.user_name'],
+                // Slack user ID (for proper @tagging)
+                [key: 'SLACK_USER_ID',    value: '$.user_id'],
+                // Channel the command was typed in
+                [key: 'SLACK_CHANNEL_ID', value: '$.channel_id'],
+                // Channel name
+                [key: 'SLACK_CHANNEL',    value: '$.channel_name'],
+            ],
+            token: 'slack-router',   // matches ?token=slack-router in webhook URL
+            printContributedVariables: true,
+            printPostContent: true,
+            causeString: 'Triggered by @$SLACK_USER via Slack: $SLACK_COMMAND $SLACK_TEXT'
+        )
+    }
+
+    // ── No parameters needed — everything comes from Slack ──
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+        timestamps()
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    stages {
+
+        // ── Stage 1: Parse & Validate ────────────────────────
+        stage('Parse Slack Command') {
+            steps {
+                script {
+
+                    // Post immediate acknowledgement back to Slack
+                    // so the user knows something happened
+                    slackSend(
+                        channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
+                        color: '#6C63FF',
+                        message: "⚡ Got it <@${env.SLACK_USER_ID}>! Parsing your command..."
+                    )
+
+                    // Parse the text: "qc 4.1 72 vikings api"
+                    //             or: "qc 4.1-Patch 72 mavericks terraform v4.1.x:6"
+                    def parts        = env.SLACK_TEXT?.trim()?.split(/\s+/)
+                    def rawInterface = parts?.size() >= 5 ? parts[4].toLowerCase() : ''
+                    def isTerraform  = rawInterface == 'terraform'
+
+                    // min 5 args always; terraform needs a 6th (terraform_version)
+                    // non-terraform must have exactly 5 (no extra args allowed)
+                    def tooManyArgs = !isTerraform && parts?.size() > 5
+
+                    if (!parts || parts.size() < 5 || (isTerraform && parts.size() < 6) || tooManyArgs) {
+                        slackSend(
+                            channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
+                            color: 'danger',
+                            message: """❌ Invalid command format <@${env.SLACK_USER_ID}>!
+
+Usage: `${env.SLACK_COMMAND} <env> <version> <rctl_buildnum> <squad> <interface> [terraform_version]`
+Examples:
+  `${env.SLACK_COMMAND} qc 4.1 72 vikings api`
+  `${env.SLACK_COMMAND} stage 4.1-Patch 84 alpha cli`
+  `${env.SLACK_COMMAND} stage 4.1 72 mavericks terraform v4.1.x:6`
+  `${env.SLACK_COMMAND} stage 4.1 72 mavericks terraform 1.1.57`
+  `${env.SLACK_COMMAND} stage 4.1 72 mavericks terraform master:657`
+
+Valid envs: `qc` `stage` `prod` `master`
+Valid squads: `vikings` `avengers` `alpha` `mavericks`
+Valid interfaces: `api` `cli` `terraform`  (terraform requires a 6th arg: terraform_version)
+Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` | `master:657`"""
+                        )
+                        error("Invalid command format. Got: '${env.SLACK_TEXT}'")
+                    }
+
+                    // ── Extract & derive params ──────────────────────────
+
+                    // /sanity maps to mini-sanity (Jenkins test_type value)
+                    def runTypeMap = [regression: 'regression', smoke: 'smoke', sanity: 'mini-sanity']
+                    env.RUN_TYPE    = runTypeMap[env.SLACK_COMMAND?.replace('/', '')?.trim()] ?: 'regression'
+
+                    env.ENVIRONMENT   = parts[0].toLowerCase()        // qc
+                    env.VERSION       = parts[1]                      // 4.1 or 4.1-Patch (→ rcloud_version)
+                    env.RCTL_BUILDNUM = parts[2]                      // 72
+                    env.SQUAD         = parts[3].toLowerCase()        // vikings
+                    env.INTERFACE     = "rafay-${rawInterface}"       // rafay-api / rafay-cli / rafay-terraform
+
+                    // rctl_branch: strip any -Patch suffix, wrap as v*.x
+                    env.RCTL_BRANCH = "v${env.VERSION.split('-')[0]}.x"   // v4.1.x
+
+                    // terraform_version: required for terraform interface
+                    // bare semver (1.1.57) → RafaySystems/rafay:1.1.57
+                    // anything with a colon (v4.1.x:6, master:657) → pass through
+                    if (isTerraform) {
+                        def tfRaw = parts[5]
+                        env.TERRAFORM_VERSION = (tfRaw =~ /^\d+\.\d+\.\d+$/) \
+                            ? "RafaySystems/rafay:${tfRaw}" \
+                            : tfRaw
+                    } else {
+                        env.TERRAFORM_VERSION = 'None'
+                    }
+
+                    // oci_docker_agent_host: enabled for API runs only
+                    env.OCI_HOST = (rawInterface == 'api') ? 'true' : 'false'
+
+                    // ── Squad → Assignee Map ─────────────────────────────
+                    // Slack user IDs: profile → ⋮ → Copy member ID
+                    def squadMap = [
+                        "vikings":  ["U07E5MPLE7K", "U09FH2AANM9"],  // uday, amarnath
+                        "avengers": ["U077D7ZJMJQ", "U0A7LJ03JKA"],  // manish, mora bhargav
+                        "alpha":    ["U03JC5J0LDU", "U03JC5J0LDU"],  // shobhit
+                        "mavericks":["U07E5MPLE7K", "U03JC5J0LDU"],  // uday, shobhit
+                    ]
+
+                    // ── Environment → Job Map ────────────────────────────
+                    def jobMap = [
+                        "qc":     "QC-Staging",
+                        "stage":  "Staging",
+                        "prod":   "Production-Regression",
+                        "master": "Master-Sanity",
+                    ]
+
+                    // ── Squad → Component Map ────────────────────────────
+                    // All current squads own infra features (eks/mks/aks/gke)
+                    def componentMap = [
+                        "vikings":  "rafay_infra",
+                        "avengers": "rafay_infra",
+                        "alpha":    "rafay_infra",
+                        "mavericks":"rafay_infra",
+                    ]
+
+                    // Validate environment
+                    if (!jobMap.containsKey(env.ENVIRONMENT)) {
+                        slackSend(
+                            channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
+                            color: 'danger',
+                            message: "❌ Unknown environment `${env.ENVIRONMENT}` <@${env.SLACK_USER_ID}>. Valid: `${jobMap.keySet().join('` `')}`"
+                        )
+                        error("Unknown environment: ${env.ENVIRONMENT}")
+                    }
+
+                    // Validate squad
+                    if (!squadMap.containsKey(env.SQUAD)) {
+                        slackSend(
+                            channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
+                            color: 'danger',
+                            message: "❌ Unknown squad `${env.SQUAD}` <@${env.SLACK_USER_ID}>. Valid: `${squadMap.keySet().join('` `')}`"
+                        )
+                        error("Unknown squad: ${env.SQUAD}")
+                    }
+
+                    // ── Fetch squad tags from DynamoDB ───────────────────
+                    def tagKey = "${env.SQUAD}_tags"
+                    try {
+                        def apiJson = new groovy.json.JsonSlurper().parseText(
+                            new URL('https://l3xmp4s41k.execute-api.us-east-1.amazonaws.com/items').text
+                        )
+                        def squadTags = []
+                        apiJson.Items.each { item ->
+                            if (item.Branch == 'master' && item.Build == 'latest') {
+                                squadTags = item.tags[tagKey] ?: []
+                            }
+                        }
+                        env.FEATURES = squadTags.join(',')
+                        echo "Fetched ${squadTags.size()} tags for squad ${env.SQUAD}: ${env.FEATURES}"
+                    } catch (e) {
+                        error("Failed to fetch tags for squad '${env.SQUAD}': ${e.message}")
+                    }
+
+                    // ── Store resolved values for later stages ───────────
+                    env.TARGET_JOB    = jobMap[env.ENVIRONMENT]
+                    env.COMPONENTS    = componentMap[env.SQUAD]
+                    def assignees     = squadMap[env.SQUAD]
+                    env.ASSIGNEE_1    = assignees[0]
+                    env.ASSIGNEE_2    = assignees[1]
+                    env.ASSIGNEE_TAGS = assignees.collect { "<@${it}>" }.join(' ')
+
+                    echo "Routing → job=${env.TARGET_JOB} rctl_branch=${env.RCTL_BRANCH} rcloud_version=${env.VERSION} test_type=${env.RUN_TYPE} interface=${env.INTERFACE} components=${env.COMPONENTS} oci_host=${env.OCI_HOST} terraform_version=${env.TERRAFORM_VERSION} rctl_buildnum=${env.RCTL_BUILDNUM}"
+                    echo "Assignees: ${env.ASSIGNEE_TAGS}"
+                }
+            }
+        }
+
+        // ── Stage 2: Trigger the Pipeline ───────────────────
+        stage('Trigger Pipeline') {
+            steps {
+                script {
+
+                    slackSend(
+                        channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
+                        color: '#FFB703',
+                        message: "🚀 Triggering *${env.RUN_TYPE}* on *${env.ENVIRONMENT}* | `${env.VERSION}` | *${env.SQUAD}* | *${env.INTERFACE}*..."
+                    )
+
+                    // Trigger the actual regression/smoke/sanity job
+                    // wait: true so we can capture the build URL + result
+                    def triggeredBuild = build(
+                        job: env.TARGET_JOB,
+                        wait: true,
+                        propagate: false,   // don't fail router if pipeline fails
+                        parameters: [
+                            string(name: 'rctl_branch',          value: env.RCTL_BRANCH),
+                            string(name: 'rcloud_version',       value: env.VERSION),
+                            string(name: 'squad_name',           value: env.SQUAD),
+                            string(name: 'test_type',            value: env.RUN_TYPE),
+                            string(name: 'rafay_interface',      value: env.INTERFACE),
+                            string(name: 'features',             value: env.FEATURES),
+                            string(name: 'components',           value: env.COMPONENTS),
+                            string(name: 'terraform_version',    value: env.TERRAFORM_VERSION),
+                            string(name: 'rctl_buildnum',        value: env.RCTL_BUILDNUM),
+                            booleanParam(name: 'oci_docker_agent_host', value: env.OCI_HOST.toBoolean()),
+                        ]
+                    )
+
+                    // Store build result details
+                    env.BUILD_RESULT    = triggeredBuild.result          // SUCCESS / FAILURE / UNSTABLE
+                    env.BUILD_URL_FINAL = triggeredBuild.absoluteUrl
+                    env.BUILD_NUMBER_FINAL = triggeredBuild.number.toString()
+                    env.BUILD_DURATION  = triggeredBuild.durationString
+
+                    echo "Build result: ${env.BUILD_RESULT}"
+                    echo "Build URL: ${env.BUILD_URL_FINAL}"
+                }
+            }
+        }
+
+        // ── Stage 3: Notify Slack ────────────────────────────
+        stage('Notify Slack') {
+            steps {
+                script {
+
+                    def isSuccess = env.BUILD_RESULT == 'SUCCESS'
+                    def statusEmoji = isSuccess ? '✅' : '❌'
+                    def statusText  = isSuccess ? 'PASSED' : 'FAILED'
+                    def color       = isSuccess ? 'good' : 'danger'
+
+                    def message = """\
+${statusEmoji} *Build #${env.BUILD_NUMBER_FINAL} — ${statusText}*
+🌿 Env: *${env.ENVIRONMENT.toUpperCase()}*  |  `${env.VERSION}`  |  *${env.SQUAD}*  |  *${env.INTERFACE}*
+⏱ Duration: ${env.BUILD_DURATION}
+🔗 ${env.BUILD_URL_FINAL}
+
+Hey ${env.ASSIGNEE_TAGS} — tests are done 👇
+Can you:
+  1. Analyse the results
+  2. Update the Confluence page for this run
+  3. Flag any failures in this thread
+
+cc <@${env.SLACK_USER_ID}> (triggered by you) | <@U02GBFSGQEA> <@U03JC5J0LDU> 👀"""
+
+                    slackSend(
+                        channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
+                        color: color,
+                        message: message
+                    )
+
+                    echo "Slack notification sent."
+                }
+            }
+        }
+    }
+
+    // ── Post: handle unexpected router job failures ──────────
+    post {
+        failure {
+            script {
+                // Only fires if router itself crashed (not the triggered pipeline)
+                try {
+                    slackSend(
+                        channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs',
+                        color: 'danger',
+                        message: "💥 Router job crashed unexpectedly. Check build logs: ${env.BUILD_URL}\n cc @kalyan"
+                    )
+                } catch (e) {
+                    echo "Could not send failure notification: ${e.message}"
+                }
+            }
+        }
+    }
+}

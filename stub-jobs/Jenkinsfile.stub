@@ -1,0 +1,34 @@
+// Stub pipeline for demo — echoes all params received from slack-router
+// Use this for: QC-Staging, Staging, Production-Regression, Master-Sanity
+
+pipeline {
+    agent any
+    parameters {
+        string(name: 'rctl_branch',          defaultValue: '')
+        string(name: 'rcloud_version',       defaultValue: '')
+        string(name: 'rctl_buildnum',        defaultValue: '')
+        string(name: 'squad_name',           defaultValue: '')
+        string(name: 'test_type',            defaultValue: '')
+        string(name: 'rafay_interface',      defaultValue: '')
+        string(name: 'features',             defaultValue: '')
+        string(name: 'components',           defaultValue: '')
+        string(name: 'terraform_version',    defaultValue: 'None')
+        booleanParam(name: 'oci_docker_agent_host', defaultValue: false)
+    }
+    stages {
+        stage('Echo Params') {
+            steps {
+                script {
+                    echo "===== Parameters received from slack-router ====="
+                    params.each { k, v -> echo "${k} = ${v}" }
+                    echo "================================================="
+                }
+            }
+        }
+        stage('Simulate Work') {
+            steps {
+                sh 'sleep 5'
+            }
+        }
+    }
+}
