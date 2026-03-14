@@ -176,14 +176,12 @@ method hudson.model.Run getAction java.lang.Class
 
 ### 7. Existing Pipelines — Required Changes
 
-All four target pipelines need two additions:
+All four target pipelines need one addition:
 
-**a) Add `triggered_by` parameter** (at the top of the `parameters { }` block):
-```groovy
-string(name: 'triggered_by', defaultValue: '', description: 'Slack username who triggered this run')
-```
+**Do NOT declare `triggered_by` / `triggered_by_id` in the `parameters { }` block.**
+These are injected by the router via `build(parameters: [...])` and are available in `params` automatically. Keeping them out of `parameters {}` hides them from the manual "Build with Parameters" form — intentional, so manual triggerers never see or set them.
 
-**b) Add `slack-notifier` call** to `post { always { } }`:
+**Add `slack-notifier` call** to `post { always { } }`:
 ```groovy
 post {
     always {
@@ -201,25 +199,34 @@ post {
                 }
             } catch (e) { echo "Robot results unavailable: ${e.message}" }
 
-            build(
-                job: 'slack-notifier',
-                wait: false,
-                propagate: false,
-                parameters: [
-                    string(name: 'build_result',    value: currentBuild.result ?: 'SUCCESS'),
-                    string(name: 'build_url',       value: env.BUILD_URL),
-                    string(name: 'build_number',    value: env.BUILD_NUMBER),
-                    string(name: 'build_duration',  value: currentBuild.durationString),
-                    string(name: 'squad_name',      value: params.squad_name),
-                    string(name: 'environment',     value: env.JOB_NAME),
-                    string(name: 'rcloud_version',  value: params.rcloud_version),
-                    string(name: 'rafay_interface', value: params.rafay_interface),
-                    string(name: 'test_type',       value: params.test_type),
-                    string(name: 'triggered_by',    value: params.triggered_by ?: ''),
-                    string(name: 'passed_count',    value: passed.toString()),
-                    string(name: 'total_count',     value: total.toString()),
-                ]
-            )
+            // Squads onboarded to Slack notifications.
+            // - Slack-triggered runs (triggered_by is set): always notify regardless of squad.
+            // - Manual runs: only notify if squad is in this list.
+            // Add squads here as rollout expands.
+            def slackEnabledSquads = ['vikings', 'alpha', 'avengers', 'mavericks']
+
+            if (params.triggered_by || slackEnabledSquads.contains(params.squad_name?.toLowerCase())) {
+                build(
+                    job: 'slack-notifier',
+                    wait: false,
+                    propagate: false,
+                    parameters: [
+                        string(name: 'build_result',    value: currentBuild.result ?: 'SUCCESS'),
+                        string(name: 'build_url',       value: env.BUILD_URL),
+                        string(name: 'build_number',    value: env.BUILD_NUMBER),
+                        string(name: 'build_duration',  value: currentBuild.durationString),
+                        string(name: 'squad_name',      value: params.squad_name),
+                        string(name: 'environment',     value: env.JOB_NAME),
+                        string(name: 'rcloud_version',  value: params.rcloud_version),
+                        string(name: 'rafay_interface', value: params.rafay_interface),
+                        string(name: 'test_type',       value: params.test_type),
+                        string(name: 'triggered_by',    value: params.triggered_by ?: ''),
+                        string(name: 'triggered_by_id', value: params.triggered_by_id ?: ''),
+                        string(name: 'passed_count',    value: passed.toString()),
+                        string(name: 'total_count',     value: total.toString()),
+                    ]
+                )
+            }
         }
     }
 }

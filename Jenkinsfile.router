@@ -96,7 +96,7 @@ pipeline {
                     if (!parts || parts.size() < 5 || (isTerraform && parts.size() < 6) || tooManyArgs) {
                         slackSend(
                             channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
-                        botUser: true,
+                        tokenCredentialId: 'slackins-bot-token',
                             color: 'danger',
                             message: """❌ Invalid command format <@${env.SLACK_USER_ID}>!
 
@@ -157,10 +157,10 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
 
                     // ── Environment → Job Map ────────────────────────────
                     def jobMap = [
-                        "qc":     "QC-Staging",
-                        "stage":  "Staging",
-                        "prod":   "Production-Regression",
-                        "master": "Master-Sanity",
+                        "qc":     "QC-Staging/master",
+                        "stage":  "Staging/master",
+                        "prod":   "Production-Regression/master",
+                        "master": "Master-Sanity/master",
                     ]
 
                     // ── Squad → Component Map ────────────────────────────
@@ -176,7 +176,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                     if (!jobMap.containsKey(env.ENVIRONMENT)) {
                         slackSend(
                             channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
-                        botUser: true,
+                        tokenCredentialId: 'slackins-bot-token',
                             color: 'danger',
                             message: "❌ Unknown environment `${env.ENVIRONMENT}` <@${env.SLACK_USER_ID}>. Valid: `${jobMap.keySet().join('` `')}`"
                         )
@@ -187,7 +187,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                     if (!squadMap.containsKey(env.SQUAD)) {
                         slackSend(
                             channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
-                        botUser: true,
+                        tokenCredentialId: 'slackins-bot-token',
                             color: 'danger',
                             message: "❌ Unknown squad `${env.SQUAD}` <@${env.SLACK_USER_ID}>. Valid: `${squadMap.keySet().join('` `')}`"
                         )
@@ -233,7 +233,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
 
                     slackSend(
                         channel: env.SLACK_CHANNEL_ID ?: '#jenkins-runs-demo',
-                        botUser: true,
+                        tokenCredentialId: 'slackins-bot-token',
                         color: '#FFB703',
                         message: "🚀 Triggering *${env.RUN_TYPE}* on *${env.ENVIRONMENT}* | `${env.VERSION}` | *${env.SQUAD}* | *${env.INTERFACE}*..."
                     )

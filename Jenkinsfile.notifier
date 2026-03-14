@@ -32,13 +32,16 @@ pipeline {
                     def triggerId = params.triggered_by_id ?: ''
 
                     def assigneeIds  = (squadMap[params.squad_name] ?: []).unique()
+
+                    // Hey line: always all squad members — responsible guys always get tagged
                     def assigneeTags = assigneeIds.collect { "<@${it}>" }.join(' ')
 
-                    // Tag triggerer only if they're not already in the squad assignee list
-                    def triggererTag = (triggerId && !assigneeIds.contains(triggerId)) ? " <@${triggerId}>" : ''
+                    // cc: TLs minus the triggerer and minus anyone already in the squad (Hey) list
+                    def ccTags = tlIds.findAll { it != triggerId && !assigneeIds.contains(it) }.collect { "<@${it}>" }.join(' ')
 
-                    // cc: TLs minus the triggerer
-                    def ccTags = tlIds.findAll { it != triggerId }.collect { "<@${it}>" }.join(' ')
+                    // Triggered-by line: only shown if triggerer is NOT a squad member
+                    // (TLs and outsiders get shown; squad members don't need it — they're already in Hey)
+                    def triggeredByLine = (triggerId && !assigneeIds.contains(triggerId)) ? "\n🙋 Triggered by: <@${triggerId}>" : ''
 
                     def isSuccess   = params.build_result == 'SUCCESS'
                     def statusEmoji = isSuccess ? '✅' : '❌'
@@ -56,15 +59,15 @@ pipeline {
 
                     slackSend(
                         channel: '#jenkins-runs-demo',
-                        botUser: true,
+                        tokenCredentialId: 'slackins-bot-token',
                         color: color,
                         message: """\
 ${statusEmoji} *Build #${params.build_number} — ${params.build_result}*
 🌿 *${params.environment.toUpperCase()}*  |  ${params.rcloud_version}  |  *${params.squad_name}*  |  *${params.rafay_interface}*
 ⏱ ${params.build_duration}${statsLine}
-🔗 ${params.build_url}
+🔗 ${params.build_url}${triggeredByLine}
 
-Hey ${assigneeTags}${triggererTag} — tests are done 👇
+Hey ${assigneeTags} — tests are done 👇
   1. Analyse the results
   2. Update the Confluence page
   3. Flag any failures in this thread
