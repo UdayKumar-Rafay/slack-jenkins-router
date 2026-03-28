@@ -25,7 +25,7 @@
 //   /sanity     qc  4.1  72  mavericks terraform master:657
 //
 //   <env>            : qc | stage | prod | master
-//   <version>        : 4.1 | 4.1-Patch  (rcloud_version; rctl_branch derived as v4.1.x)
+//   <version>        : 4.1 | 4.1-Patch  (rcloud_version; rctl_branch: v4.1.x non-prod, r4.1.0 prod)
 //   <rctl_buildnum>  : rctl image build number (e.g. 72)
 //   <squad>          : vikings | avengers | alpha | mavericks
 //   <interface>      : api | cli | terraform
@@ -52,6 +52,9 @@ pipeline {
                 [key: 'SLACK_CHANNEL_ID', value: '$.channel_id'],
                 // Channel name
                 [key: 'SLACK_CHANNEL',    value: '$.channel_name'],
+                // OCI override from modal (absent in text-based flow)
+                [key: 'OCI_OVERRIDE',          value: '$.oci'],
+                [key: 'RCTL_BRANCH_OVERRIDE',  value: '$.rctl_branch_override'],
             ],
             token: 'slack-router',   // matches ?token=slack-router in webhook URL
             printContributedVariables: true,
@@ -91,7 +94,7 @@ pipeline {
 
                     // min 5 args always; terraform needs a 6th (terraform_version)
                     // non-terraform must have exactly 5 (no extra args allowed)
-                    def tooManyArgs = !isTerraform && parts?.size() > 5
+                    def tooManyArgs = (!isTerraform && parts?.size() > 6) || (isTerraform && parts?.size() > 7)
 
                     if (!parts || parts.size() < 5 || (isTerraform && parts.size() < 6) || tooManyArgs) {
                         slackSend(
@@ -128,8 +131,15 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                     env.SQUAD         = parts[3].toLowerCase()        // vikings
                     env.INTERFACE     = "rafay-${rawInterface}"       // rafay-api / rafay-cli / rafay-terraform
 
-                    // rctl_branch: strip any -Patch suffix, wrap as v*.x
-                    env.RCTL_BRANCH = "v${env.VERSION.split('-')[0]}.x"   // v4.1.x
+                    // rctl_branch: override wins if provided (e.g. r4.1.2 for prod patches)
+                    // otherwise: prod → r4.1.0, all others → v4.1.x
+                    def rctlBranchOverride = (env.RCTL_BRANCH_OVERRIDE_0 ?: env.RCTL_BRANCH_OVERRIDE ?: '').trim()
+                    def baseVersion        = env.VERSION.split('-')[0]     // 4.1
+                    env.RCTL_BRANCH = rctlBranchOverride \
+                        ? rctlBranchOverride \                             // r4.1.2 (explicit)
+                        : (env.ENVIRONMENT == 'prod') \
+                            ? "r${baseVersion}.0" \                        // r4.1.0
+                            : "v${baseVersion}.x"                          // v4.1.x
 
                     // terraform_version: required for terraform interface
                     // bare semver (1.1.57) → RafaySystems/rafay:1.1.57
@@ -143,8 +153,13 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                         env.TERRAFORM_VERSION = 'None'
                     }
 
-                    // oci_docker_agent_host: enabled for API runs only
-                    env.OCI_HOST = (rawInterface == 'api') ? 'true' : 'false'
+                    // infra_threads: optional last arg (index 5 for non-terraform, 6 for terraform)
+                    def threadsIdx = isTerraform ? 6 : 5
+                    env.INFRA_THREADS = (parts.size() > threadsIdx) ? parts[threadsIdx] : '5'
+
+                    // oci_docker_agent_host: user-set via modal if present, else auto from interface
+                    def ociOverride = env.OCI_OVERRIDE_0 ?: env.OCI_OVERRIDE ?: ''
+                    env.OCI_HOST = ociOverride ?: ((rawInterface == 'api') ? 'true' : 'false')
 
                     // ── Squad → Assignee Map ─────────────────────────────
                     // Slack user IDs: profile → ⋮ → Copy member ID
@@ -254,6 +269,7 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                             string(name: 'components',           value: env.COMPONENTS),
                             string(name: 'terraform_version',    value: env.TERRAFORM_VERSION),
                             string(name: 'rctl_buildnum',        value: env.RCTL_BUILDNUM),
+                            string(name: 'infra_threads',        value: env.INFRA_THREADS),
                             booleanParam(name: 'oci_docker_agent_host', value: env.OCI_HOST.toBoolean()),
                             string(name: 'triggered_by',     value: env.SLACK_USER),
                             string(name: 'triggered_by_id',  value: env.SLACK_USER_ID),

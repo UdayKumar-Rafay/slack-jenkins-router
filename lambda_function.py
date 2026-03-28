@@ -94,7 +94,16 @@ def open_modal(trigger_id, channel_id, user_id, user_name, command):
                 'label': {'type': 'plain_text', 'text': 'rctl Build Number'},
                 'element': {
                     'type': 'plain_text_input', 'action_id': 'rctl_input',
-                    'placeholder': {'type': 'plain_text', 'text': 'current latest: 6'}
+                    'placeholder': {'type': 'plain_text', 'text': 'prod: 2 | others: use latest'}
+                }
+            },
+            {
+                'type': 'input', 'block_id': 'rctl_branch_block',
+                'optional': True,
+                'label': {'type': 'plain_text', 'text': 'rctl Branch Override'},
+                'element': {
+                    'type': 'plain_text_input', 'action_id': 'rctl_branch_input',
+                    'placeholder': {'type': 'plain_text', 'text': 'e.g. r4.1.2 — prod patches only; leave blank to auto-derive'}
                 }
             },
             {
@@ -103,7 +112,26 @@ def open_modal(trigger_id, channel_id, user_id, user_name, command):
                 'label': {'type': 'plain_text', 'text': 'Terraform Version'},
                 'element': {
                     'type': 'plain_text_input', 'action_id': 'tf_input',
-                    'placeholder': {'type': 'plain_text', 'text': 'v4.1.x / master / 1.1.57 — only for terraform interface'}
+                    'placeholder': {'type': 'plain_text', 'text': 'latest: v4.1.x:19 — only for terraform interface'}
+                }
+            },
+            {
+                'type': 'input', 'block_id': 'threads_block',
+                'optional': True,
+                'label': {'type': 'plain_text', 'text': 'Thread Count'},
+                'element': {
+                    'type': 'plain_text_input', 'action_id': 'threads_input',
+                    'initial_value': '5',
+                    'placeholder': {'type': 'plain_text', 'text': 'default: 5'}
+                }
+            },
+            {
+                'type': 'input', 'block_id': 'oci_block',
+                'optional': True,
+                'label': {'type': 'plain_text', 'text': 'OCI Docker Agent'},
+                'element': {
+                    'type': 'checkboxes', 'action_id': 'oci_checkbox',
+                    'options': [{'text': {'type': 'plain_text', 'text': 'Enable OCI instance'}, 'value': 'true'}]
                 }
             }
         ]
@@ -135,8 +163,11 @@ def handle_modal_submission(payload):
     version   = values['version_block']['version_input']['value'].strip()
     squad     = values['squad_block']['squad_select']['selected_option']['value']
     interface = values['interface_block']['interface_select']['selected_option']['value']
-    rctl      = (values['rctl_block']['rctl_input'].get('value') or '').strip()
-    tf        = (values['tf_block']['tf_input'].get('value') or '').strip()
+    rctl         = (values['rctl_block']['rctl_input'].get('value') or '').strip()
+    rctl_branch  = (values['rctl_branch_block']['rctl_branch_input'].get('value') or '').strip()
+    tf           = (values['tf_block']['tf_input'].get('value') or '').strip()
+    threads = (values['threads_block']['threads_input'].get('value') or '').strip()
+    oci     = 'true' if values['oci_block']['oci_checkbox'].get('selected_options') else 'false'
 
     parts = [env, version]
     if rctl:
@@ -144,11 +175,15 @@ def handle_modal_submission(payload):
     parts += [squad, interface]
     if interface == 'terraform' and tf:
         parts.append(tf)
+    if threads:
+        parts.append(threads)
 
     synthetic = urllib.parse.urlencode({
         'command': command, 'text': ' '.join(parts),
         'user_id': user_id, 'user_name': user_name,
-        'channel_id': channel_id, 'channel_name': ''
+        'channel_id': channel_id, 'channel_name': '',
+        'oci': oci,
+        'rctl_branch_override': rctl_branch,
     })
     forward_to_jenkins(synthetic)
     return {'statusCode': 200, 'body': ''}
