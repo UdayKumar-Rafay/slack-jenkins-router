@@ -135,11 +135,13 @@ Terraform version formats: `1.1.57` → RafaySystems/rafay:1.1.57 | `v4.1.x:6` |
                     // otherwise: prod → r4.1.0, all others → v4.1.x
                     def rctlBranchOverride = (env.RCTL_BRANCH_OVERRIDE_0 ?: env.RCTL_BRANCH_OVERRIDE ?: '').trim()
                     def baseVersion        = env.VERSION.split('-')[0]     // 4.1
-                    env.RCTL_BRANCH = rctlBranchOverride \
-                        ? rctlBranchOverride \                             // r4.1.2 (explicit)
-                        : (env.ENVIRONMENT == 'prod') \
-                            ? "r${baseVersion}.0" \                        // r4.1.0
-                            : "v${baseVersion}.x"                          // v4.1.x
+                    if (rctlBranchOverride) {
+                        env.RCTL_BRANCH = rctlBranchOverride               // r4.1.2 (explicit override)
+                    } else if (env.ENVIRONMENT == 'prod') {
+                        env.RCTL_BRANCH = "r${baseVersion}.0"              // r4.1.0
+                    } else {
+                        env.RCTL_BRANCH = "v${baseVersion}.x"              // v4.1.x
+                    }
 
                     // terraform_version: required for terraform interface
                     // bare semver (1.1.57) → RafaySystems/rafay:1.1.57
